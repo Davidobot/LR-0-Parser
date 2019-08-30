@@ -43,7 +43,8 @@ namespace lr0_parser {
         }
 
         // assuming everything is 2 characters
-        public List<String> GetItems() { // String in format LHS->alpha_._B_beta or LHS->._alpha_B_beta
+        // String in format LHS->alpha_._B_beta or LHS->._alpha_B_beta
+        public List<String> GetItems() { 
             List<String> items = new List<string>();
 
             StringBuilder sb = new StringBuilder();
@@ -70,7 +71,7 @@ namespace lr0_parser {
             item = item.Replace("_", "");
 
             if (item.CompareTo("") == 0)
-                return (byte) T.epsilon; // dot is at end of item
+                return 0; // dot is at end of item
 
             return Byte.Parse(item.Substring(0, 2));
         }
@@ -131,6 +132,51 @@ namespace lr0_parser {
             return gotoo;
         }
 
+        static bool Contains(List<HashSet<string>> C, HashSet<string> vs) {
+            foreach(HashSet<string> c in C) {
+                if (c.SetEquals(vs))
+                    return true;
+            }
+            return false;
+        }
+
+        // Caluclate C, the canonical collection of sets of LR(0) items for augmented grammar G
+        // This is the collections I_i, as shown in figure 4.31
+        static List<HashSet<string>> ITEMS(List<ProductionRule> G) {
+            List<HashSet<string>> C = new List<HashSet<string>>();
+            C.Add(CLOSURE(new List<string> { G[0].GetItems()[0] }, G)); // assume entry point S' is first item of grammar production rules
+
+            while (true) {
+                List<HashSet<string>> toAdd = new List<HashSet<string>>();
+
+                foreach (HashSet<string> I in C) {
+                    foreach (T x in Enum.GetValues(typeof(T))) { // loop over all terminals
+                        byte X = (byte)x;
+                        HashSet<string> gotoo = GOTO(I.ToList(), X, G);
+
+                        if (gotoo.Count > 0 && !Contains(C, gotoo))
+                            toAdd.Add(gotoo);
+                    }
+
+                    foreach (T x in Enum.GetValues(typeof(NT))) { // loop over all non-terminals
+                        byte X = (byte)x;
+                        HashSet<string> gotoo = GOTO(I.ToList(), X, G);
+
+                        if (gotoo.Count > 0 && !Contains(C, gotoo))
+                            toAdd.Add(gotoo);
+                    }
+                }
+
+                foreach (HashSet<string> hs in toAdd)
+                    C.Add(hs);
+
+                if (toAdd.Count == 0)
+                    break;
+            }
+
+            return C;
+        }
+
         // Define Grammar in terms of production rules
         List<ProductionRule> grammar = new List<ProductionRule> {
             new ProductionRule((byte) NT.EPDash, new List<byte>{ (byte) NT.EP }),
@@ -159,9 +205,7 @@ namespace lr0_parser {
         };
 
         static void Main(string[] args) {
-            HashSet<String> close = GOTO(new List<string> { "20->21._", "21->21_._10_23"}, (byte) T.plus, textbookGrammar);
-            foreach (var v in close)
-                Console.WriteLine(v);
+            List<HashSet<string>> vs = ITEMS(textbookGrammar);
 
             Console.ReadLine();
         }
