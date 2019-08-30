@@ -140,6 +140,13 @@ namespace lr0_parser {
             return false;
         }
 
+        static int GetStateID(HashSet<string> I, List<HashSet<string>> C) {
+            for (int i = 0; i < C.Count; i++)
+                if (I.SetEquals(C[i]))
+                    return i;
+            return -1;
+        }
+
         // Caluclate C, the canonical collection of sets of LR(0) items for augmented grammar G
         // This is the collections I_i, as shown in figure 4.31
         static List<HashSet<string>> ITEMS(List<ProductionRule> G) {
@@ -158,7 +165,7 @@ namespace lr0_parser {
                             toAdd.Add(gotoo);
                     }
 
-                    foreach (T x in Enum.GetValues(typeof(NT))) { // loop over all non-terminals
+                    foreach (NT x in Enum.GetValues(typeof(NT))) { // loop over all non-terminals
                         byte X = (byte)x;
                         HashSet<string> gotoo = GOTO(I.ToList(), X, G);
 
@@ -175,6 +182,49 @@ namespace lr0_parser {
             }
 
             return C;
+        }
+
+        // Assuming that when a left-recursive rule is found, there are just 2 paths;
+        // ie A -> Aa|b becomes A -> bA' and A' -> aA' | eps
+        static List<ProductionRule> RemoveLeftRecursion(List<ProductionRule> G) {
+            List<ProductionRule> GG = new List<ProductionRule>();
+
+            for (int i = 0; i < G.Count; i++) {
+                ProductionRule g = G[i];
+
+                if (g.RHS == g.LHS[0]) {
+                    // g2.LHS is b
+                    ProductionRule g2 = G[i + 1];
+
+                    List<byte> temp = new List<byte>(g2.LHS); temp.Add((byte)(g.RHS + 20)); // 20 to make sure there is no overlap between nonterminals
+                    GG.Add(new ProductionRule(g.RHS, temp)); // A -> bA'
+
+                    temp = new List<byte>(g.LHS); temp.RemoveAt(0); temp.Add((byte)(g.RHS + 20));
+                    GG.Add(new ProductionRule((byte)(g.RHS + 20), temp));  // A' -> aA'
+
+                    GG.Add(new ProductionRule((byte)(g.RHS + 20), new List<byte> { (byte)T.epsilon })); // A' -> eps
+                    i++; continue;
+                }
+
+                GG.Add(g);
+            }
+
+            return GG;
+        }
+
+        // calculate FIRST for all grammar symbols
+        static Dictionary<byte, List<byte>> FIRST(List<ProductionRule> G) {
+            Dictionary<byte, List<byte>> first = new Dictionary<byte, List<byte>>();
+
+            // FIRST of a terminal is itself in a singleton
+            foreach (T x in Enum.GetValues(typeof(T))) {
+                byte X = (byte)x;
+                first.Add(X, new List<byte> { X });
+            }
+
+
+
+            return first;
         }
 
         // Define Grammar in terms of production rules
@@ -205,7 +255,30 @@ namespace lr0_parser {
         };
 
         static void Main(string[] args) {
-            List<HashSet<string>> vs = ITEMS(textbookGrammar);
+            // Constructing a SLR-parsing table
+            // Step 1, construct C,  the collection of sets of LR(0) items for G'.
+            List<HashSet<string>> C = ITEMS(textbookGrammar);
+
+            // Step 2, construct Action and Goto tables
+            string[,] Action = new string[C.Count, T.epsilon - T.plus + 1]; // number of states, number of terminals
+            // actions:
+            //          s_i means shift and stack state i
+            //          r_j means reduce by the production numbered j
+            //          acc means accept
+            //          otherwise (blank) means error
+            int[,] Goto = new int[C.Count, NT.S - NT.EPDash + 1];  // number of states, number of non-terminals
+
+            for (int i = 0; i < C.Count; i++) {
+                foreach (NT A in Enum.GetValues(typeof(NT))) {
+                    byte a = (byte)A;
+                    int j = GetStateID(GOTO(C[i].ToList(), a, textbookGrammar), C);
+                    if (j != -1)
+                        Goto[i, (int) (a - NT.EPDash)] = j;
+                }
+            }
+
+            // To calculate Action, need to calculate FOLLOW, which needs FIRST, which needs non-left-recursive grammar
+            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar);
 
             Console.ReadLine();
         }
