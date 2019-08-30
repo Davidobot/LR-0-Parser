@@ -1,0 +1,68 @@
+== Compilation ==
+= Questions =
+2. \emph{Grammar} for a language describes the hierarchical structure of programs. It has four components: \emph{terminals} (elementary symbols, also referred to as tokens), \emph{nonterminals} (with each nonterminal representing  set of string of terminals), \emph{production rules} (consisting of a head nonterminal, an arrow, and a body sequence of terminals/nonterminals), and a \emph{start} symbol designated from a nonterminal. Production rules specify construct forms -- if the head represents a construct, then the body represents a written form of the construct.\par
+Grammars can be ambiguous -- it can have more than one parse tree generated from a string of terminals. Having more than a single parse tree, given an input, usually leads to the input having multiple meanings. To mitigate this problem, one needs to design unambiguous grammar or have rules to resolve ambiguity.\par
+An example of ambiguous syntax in Java is as follows: \texttt{int a = 10 + 2 * 2}. It can be parsed as \texttt{(10 + 2) * 2} or as \texttt{10 + (2 * 2)}. Java solves this ambiguity by means of operator precedence (operators with higher precedence would be executed first). Since * has a higher precedence than +, the second parse tree would be accepted.
+
+3. An \emph{intermediate language} is a representation of source code that is designed for easy processing down the line -- for translation and optimisation, for example. An intermediate language is meant to be accurate (represent source code without loss of information) and independent of both the source and target languages.\par
+\emph{Stack-based languages} are generally trees, including parse and syntax trees. These allow for static checking of syntactic and semantic rules of the source language. \par
+\emph{Linear languages}, such as 3-address instructions, are sequences of elementary program steps without a hierarchical structure. It allows for significant optimisation of code, by for example breaking down the program into blocks that require no branching and optimising them. Most modern compilers produce both forms (to varying degrees). For example a simple syntax tree, without a complete structure, can be used to construct the 3-address instructions and then discarded when not needed anymore.
+
+4. \emph{Compiler compilers} are programs that generate parsers (most common application), interpreters or compilers based on a formal description of a source and target language (the target language is often machine code, so the description would be of the intended machine for the program to be run on). They are often used to help designing and implementing new programming languages. For example, $compiler^2$s can generate the source code for parsers for a given language definition.
+
+5. \emph{Recursive Descent} is a top-down parser -- starting with the root, the program applies recursive procedures to process the incoming input. Each nonterminal has an associated procedure that is called when the nonterminal is encountered. The algorithm then moves onto the next node (usually leftmost unexpanded). \par It is necessary to avoid left-recursion as it can lead to a recursive-descent parser to loop forever. An example is $expr \rightarrow expr + term$. This expression (and similar) can be turned to right-recursive to avoid this problem -- this is usually achieved by introduction of a new nonterminal.\par
+In general, a left-recursive production has a the structure $A \rightarrow A\alpha$ where $\alpha$ is a sequence of terminals and nonterminals that do not start with $A$. Consider $A \rightarrow A\alpha | \beta$, such as $expr \rightarrow expr + term | term$ (where $A = expr$, $\alpha = +term$ and $\beta = term$. Then the production can be rewritten as:
+\begin{align*}
+		A \rightarrow \beta R \\
+		R \rightarrow \alpha R | \epsilon
+\end{align*}
+
+6. Unlike recursive descent, a \emph{shift-reduce} parser is a bottom-up one. Grammar symbols are stored in a stack and the rest of the unparsed string is stored in a buffer. The input string is parsed left-to-right, with symbols being pushed onto the stack. When a production rule (say, string $\beta$) is achieved in the stack, $\beta$ is reduced to the head of the production. The cycle is repeated until the input is empty and the stack contains the start symbol, or until an error is encountered.\par
+It is not obligatory for a parser to reduce a right-hand-side (RHS; sequence of terminals and nonterminals) just because it appears at the top of the stack. However, it cannot reduce a RHS that is not at the top of the stack. Hence, the parser needs to make a decision about whether to reduce before pushing any more tokens. The decision is not always obvious, so the parser can look at one or more tokens (look-ahead tokens) which haven't been read yet for more context to make the correct decision.\par
+Disadvantages include that it is too much work to design a LR parser by hand, so it needs a automated parser generator. Furthermore, if the grammar is ambiguous then it is hard to parse the input left-to-right and other methods would be preferred.
+
+== Digital Communications ==
+= Questions =
+1.
+\begin{align*}
+	signedfloat \rightarrow sign\ float
+	float \rightarrow number . number | number
+	number \rightarrow digit\ number | digit
+	sign \rightarrow - | + | \epsilon
+	digit \rightarrow 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+\end{align*}
+This grammar is Type-2 (context-free) as all production rules abide to the constraint $A \rightarrow \alpha$ where $A$ is non-terminal and $\alpha$ is a string of potentially empty terminals and/or non-terminals. It's not quite Type-3 (regular) due to $float \rightarrow number . number$ not abiding to the constraints $A \rightarrow a$ and $A \rightarrow aB$ where $B$ is non-terminal and $a$ is terminal. It can be converted to Type-3 if needed.
+
+2. 
+\begin{align*}
+	expression \rightarrow expression \boldsymbol{+} expr | expr
+	expr \rightarrow expr \boldsymbol{-} term | term
+	term \rightarrow term \boldsymbol{*} trig | trig
+	trig \rightarrow \boldsymbol{cos} factorial | factorial
+	factorial \rightarrow statement \boldsymbol{!} | statement
+	statement \rightarrow signedfloat | \boldsymbol{(} expression \boldsymbol{)} | expression
+\end{align*}
+
+3. Terminals are as follows: \bm{+ - * cos ! ( ) 0 1 2 3 4 5 6 7 8 9 .}.\par
+Nonterminals are as follows: \emph{signedfloat, float, number, sign, digit, expression, expr, term, trig, factorial, statement}. \emph{statement} is the entry point into the grammar.
+
+4. The lexer will have three different kinds of token types (\emph{token-name})-- parenthesis, signedfloat, operator.
+
+\begin{table}[]
+\begin{tabular}{l|lr}
+№  & Augmented Grammar & \multicolumn{1}{l}{FOLLOW} \\ \hline
+1  & EP -> EP + EM     & ) $                        \\
+2  & EP -> EM          & ) $                        \\
+3  & EM -> EM - TM     & + ) $                      \\
+4  & EM -> TM          & + ) $                      \\
+5  & TM -> TM * TR     & - + ) $                    \\
+6  & TM -> TR          & - + ) $                    \\
+7  & TR -> cos F       & * - + ) $                  \\
+8  & TR -> F           & * - + ) $                  \\
+9  & F -> S!           & * - + ) $                  \\
+10 & F -> S            & * - + ) $                  \\
+11 & S -> ( EP )       & ! * - + ) $                \\
+12 & S -> id           & ! * - + ) $               
+\end{tabular}
+\end{table}
+

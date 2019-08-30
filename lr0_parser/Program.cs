@@ -25,7 +25,7 @@ namespace lr0_parser {
 
     // Terminals
     enum T {
-        plus = 10, minus = 11, times = 12, cos = 13, factorial = 14, bracket_open = 15, bracket_close = 16, id = 17, dollar = 18
+        plus = 10, minus = 11, times = 12, cos = 13, factorial = 14, bracket_open = 15, bracket_close = 16, id = 17, dollar = 18, epsilon = 19
     }
 
     // Non-terminals
@@ -64,9 +64,15 @@ namespace lr0_parser {
     }
 
     class Program {
-        // 
-        static byte ExtractNextToDot(String item) {
+        // extracts terminal/non-terminal from directly to the right of the dot in an item
+        static byte ExtractNextToDot(string item) {
+            item = item.Split('.')[1]; // one dot, take RHS
+            item = item.Replace("_", "");
 
+            if (item.CompareTo("") == 0)
+                return (byte) T.epsilon; // dot is at end of item
+
+            return Byte.Parse(item.Substring(0, 2));
         }
 
         // Calculate CLOSURE for a given grammar
@@ -110,6 +116,11 @@ namespace lr0_parser {
         };
 
         static void Main(string[] args) {
+            ProductionRule rule = new ProductionRule((byte)NT.TM, new List<byte> { (byte)NT.TM, (byte)T.times, (byte)NT.TR });
+            foreach (var v in rule.GetItems())
+                Console.WriteLine("{0} : {1}", v, ExtractNextToDot(v));
+
+            Console.ReadLine();
         }
     }
 }
