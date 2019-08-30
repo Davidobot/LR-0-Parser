@@ -75,30 +75,63 @@ namespace lr0_parser {
             return Byte.Parse(item.Substring(0, 2));
         }
 
-        // Calculate CLOSURE for a given grammar
-        static HashSet<string> CLOSURE(List<ProductionRule> G) {
+        // moves dot one over
+        static string MoveDotToRight(string item) {
+            int dotPos = item.IndexOf('.') + 3; // move it over, accounting for _ and removed .
+            item = item.Replace(".", "");
+            item = item.Insert(dotPos, "_."); item = item.Replace(">_", ">"); item = item.Replace("__", "_");
+
+            return item;
+        }
+
+        // Calculate CLOSURE for a given set of items, given a grammar
+        static HashSet<string> CLOSURE(List<string> I, List<ProductionRule> G) {
             HashSet<string> close = new HashSet<string>();
 
-            // add every item, derived from grammar into set
-            foreach (ProductionRule g in G)
-                foreach (string it in g.GetItems())
-                    close.Add(it);
+            // add every item in I to set [rule 1]
+            foreach (string it in I)
+                close.Add(it);
 
             // if A -> a.Bb is in set and B->y is a production, then add B->.y into set
             while (true) {
-                bool added = false;
+                List<string> toAdd = new List<string>();
 
                 foreach (string A in close) {
+                    byte B = ExtractNextToDot(A);
 
+                    foreach (ProductionRule g in G)
+                        if (g.RHS == B) {
+                            string y = g.GetItems()[0];
+
+                            if (!close.Contains(y)) {
+                                toAdd.Add(y); // index 0 is the one with the dot in first position
+                            }
+                        }
                 }
 
-                if (!added)
+                foreach (string y in toAdd)
+                    close.Add(y);
+
+                if (toAdd.Count == 0)
                     break;
             }
 
             return close;
         }
 
+        // Calculate the set GOTO(I, op) given an item set I and operator op; as well as grammar
+        static HashSet<string> GOTO(List<string> I, byte op, List<ProductionRule> G) {
+            HashSet<string> gotoo = new HashSet<string>();
+
+            foreach (string it in I)
+                if (ExtractNextToDot(it) == op) // check that op is immediately to the right
+                    foreach (string itc in CLOSURE(new List<string> { MoveDotToRight(it) }, G)) // calculate closure on new item
+                        gotoo.Add(itc);
+
+            return gotoo;
+        }
+
+        // Define Grammar in terms of production rules
         List<ProductionRule> grammar = new List<ProductionRule> {
             new ProductionRule((byte) NT.EPDash, new List<byte>{ (byte) NT.EP }),
             new ProductionRule((byte) NT.EP, new List<byte>{ (byte) NT.EP, (byte) T.plus, (byte) NT.EM }),
@@ -115,10 +148,20 @@ namespace lr0_parser {
             new ProductionRule((byte) NT.S, new List<byte>{ (byte) T.id }),
         };
 
+        static List<ProductionRule> textbookGrammar = new List<ProductionRule> {
+            new ProductionRule((byte) NT.EPDash, new List<byte>{ (byte) NT.EP }),
+            new ProductionRule((byte) NT.EP, new List<byte>{ (byte) NT.EP, (byte) T.plus, (byte) NT.TM }),
+            new ProductionRule((byte) NT.EP, new List<byte>{ (byte) NT.TM }),
+            new ProductionRule((byte) NT.TM, new List<byte>{ (byte) NT.TM, (byte) T.times, (byte) NT.S }),
+            new ProductionRule((byte) NT.TM, new List<byte>{ (byte) NT.S }),
+            new ProductionRule((byte) NT.S, new List<byte>{ (byte) T.bracket_open, (byte) NT.EP, (byte) T.bracket_close }),
+            new ProductionRule((byte) NT.S, new List<byte>{ (byte) T.id }),
+        };
+
         static void Main(string[] args) {
-            ProductionRule rule = new ProductionRule((byte)NT.TM, new List<byte> { (byte)NT.TM, (byte)T.times, (byte)NT.TR });
-            foreach (var v in rule.GetItems())
-                Console.WriteLine("{0} : {1}", v, ExtractNextToDot(v));
+            HashSet<String> close = GOTO(new List<string> { "20->21._", "21->21_._10_23"}, (byte) T.plus, textbookGrammar);
+            foreach (var v in close)
+                Console.WriteLine(v);
 
             Console.ReadLine();
         }
