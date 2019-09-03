@@ -34,12 +34,11 @@ namespace lr0_parser {
     }
 
     class ProductionRule {
-        public byte RHS;
-        public List<byte> LHS = new List<byte>();
+        public byte LHS;
+        public List<byte> RHS = new List<byte>();
 
-        public ProductionRule(byte rhs, List<byte> lhs) {
-            RHS = rhs;
-            LHS = lhs;
+        public ProductionRule(byte lhs, List<byte> rhs) {
+            LHS = lhs; RHS = rhs;
         }
 
         // assuming everything is 2 characters
@@ -48,15 +47,15 @@ namespace lr0_parser {
             List<String> items = new List<string>();
 
             StringBuilder sb = new StringBuilder();
-            sb.Append(RHS); sb.Append("->");
-            for (int i = 0; i < LHS.Count; i++) {
-                sb.Append(LHS[i]);
-                if (i != LHS.Count - 1)
+            sb.Append(LHS); sb.Append("->");
+            for (int i = 0; i < RHS.Count; i++) {
+                sb.Append(RHS[i]);
+                if (i != RHS.Count - 1)
                     sb.Append("_");
             }
             String woDots = sb.ToString();
 
-            for (int i = 0; i <= LHS.Count; i++) {
+            for (int i = 0; i <= RHS.Count; i++) {
                 items.Add(woDots.Insert(i < 2 ? (4 + i * 2) : (6 + (i - 1) * 3), (i == 0) ? "._" : "_."));
             }
 
@@ -101,7 +100,7 @@ namespace lr0_parser {
                     byte B = ExtractNextToDot(A);
 
                     foreach (ProductionRule g in G)
-                        if (g.RHS == B) {
+                        if (g.LHS == B) {
                             string y = g.GetItems()[0];
 
                             if (!close.Contains(y)) {
@@ -192,17 +191,17 @@ namespace lr0_parser {
             for (int i = 0; i < G.Count; i++) {
                 ProductionRule g = G[i];
 
-                if (g.RHS == g.LHS[0]) {
+                if (g.LHS == g.RHS[0]) {
                     // g2.LHS is b
                     ProductionRule g2 = G[i + 1];
 
-                    List<byte> temp = new List<byte>(g2.LHS); temp.Add((byte)(g.RHS + 20)); // 20 to make sure there is no overlap between nonterminals
-                    GG.Add(new ProductionRule(g.RHS, temp)); // A -> bA'
+                    List<byte> temp = new List<byte>(g2.RHS); temp.Add((byte)(g.LHS + 20)); // 20 to make sure there is no overlap between nonterminals
+                    GG.Add(new ProductionRule(g.LHS, temp)); // A -> bA'
 
-                    temp = new List<byte>(g.LHS); temp.RemoveAt(0); temp.Add((byte)(g.RHS + 20));
-                    GG.Add(new ProductionRule((byte)(g.RHS + 20), temp));  // A' -> aA'
+                    temp = new List<byte>(g.RHS); temp.RemoveAt(0); temp.Add((byte)(g.LHS + 20));
+                    GG.Add(new ProductionRule((byte)(g.LHS + 20), temp));  // A' -> aA'
 
-                    GG.Add(new ProductionRule((byte)(g.RHS + 20), new List<byte> { (byte)T.epsilon })); // A' -> eps
+                    GG.Add(new ProductionRule((byte)(g.LHS + 20), new List<byte> { (byte)T.epsilon })); // A' -> eps
                     i++; continue;
                 }
 
@@ -213,16 +212,51 @@ namespace lr0_parser {
         }
 
         // calculate FIRST for all grammar symbols
-        static Dictionary<byte, List<byte>> FIRST(List<ProductionRule> G) {
-            Dictionary<byte, List<byte>> first = new Dictionary<byte, List<byte>>();
+        static Dictionary<byte, HashSet<byte>> FIRST(List<ProductionRule> G) {
+            Dictionary<byte, HashSet<byte>> first = new Dictionary<byte, HashSet<byte>>();
 
-            // FIRST of a terminal is itself in a singleton
-            foreach (T x in Enum.GetValues(typeof(T))) {
-                byte X = (byte)x;
-                first.Add(X, new List<byte> { X });
+            HashSet<byte> grammarSymbols = new HashSet<byte>();
+            foreach (T x in Enum.GetValues(typeof(T)))
+                grammarSymbols.Add((byte)x);
+            foreach (ProductionRule pr in G)
+                grammarSymbols.Add(pr.LHS);
+
+            foreach (byte X in grammarSymbols)
+                first.Add(X, new HashSet<byte>());
+
+            while (true) {
+                bool added = false;
+
+                // Loop over all grammar symbols X
+                foreach (byte X in grammarSymbols) {
+                    // FIRST of a terminal is itself in a singleton
+                    if (X >= (byte)T.plus && X <= (byte)T.epsilon)
+                        added = first[X].Add(X) | added;
+
+                    foreach (ProductionRule pr in G) {
+                        if (pr.LHS == X) {
+                            // loop through Ys in production X -> Y_1 Y_2 ... Y_k
+                            foreach (byte Y in pr.RHS) {
+                                // Add all elements of Y_i to FIRST(X)
+                                foreach (byte a in first[Y])
+                                    added = first[X].Add(a) | added;
+
+                                // only continue onto Y_{i+1} if FIRST(Y_i) contains eps
+                                if (!first[Y].Contains((byte)T.epsilon))
+                                    break;
+                            }
+                        }
+                    }
+
+                    // if X -> eps is a production, add eps to FIRST(X)
+                    foreach (ProductionRule pr in G)
+                        if (pr.LHS == X && pr.RHS.Contains((byte)T.epsilon))
+                            added = first[X].Add((byte)T.epsilon) | added;
+                }
+
+                if (!added)
+                    break;
             }
-
-
 
             return first;
         }
@@ -278,7 +312,8 @@ namespace lr0_parser {
             }
 
             // To calculate Action, need to calculate FOLLOW, which needs FIRST, which needs non-left-recursive grammar
-            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar);
+            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar.Skip(1).ToList()); // remove augmented grammar rule
+            Dictionary<byte, HashSet<byte>> first = FIRST(NLRGrammar);
 
             Console.ReadLine();
         }
