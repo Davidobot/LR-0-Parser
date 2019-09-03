@@ -84,6 +84,10 @@ namespace lr0_parser {
             return item;
         }
 
+        static bool IsTerminal(byte a) {
+            return a >= (byte)T.plus && a <= (byte)T.epsilon;
+        }
+
         // Calculate CLOSURE for a given set of items, given a grammar
         static HashSet<string> CLOSURE(List<string> I, List<ProductionRule> G) {
             HashSet<string> close = new HashSet<string>();
@@ -230,7 +234,7 @@ namespace lr0_parser {
                 // Loop over all grammar symbols X
                 foreach (byte X in grammarSymbols) {
                     // FIRST of a terminal is itself in a singleton
-                    if (X >= (byte)T.plus && X <= (byte)T.epsilon)
+                    if (IsTerminal(X))
                         added = first[X].Add(X) | added;
 
                     foreach (ProductionRule pr in G) {
@@ -259,6 +263,81 @@ namespace lr0_parser {
             }
 
             return first;
+        }
+
+        // calculate FIRST for a given terminal/non-terminal string
+        static HashSet<byte> FIRST(List<byte> beta, Dictionary<byte, HashSet<byte>> first) {
+            HashSet<byte> f = new HashSet<byte>();
+
+            bool addEps = beta.Count > 0;
+            foreach (byte Y in beta) {
+                // Add all elements of Y_i to FIRST(X)
+                foreach (byte a in first[Y])
+                    if (a != (byte)T.epsilon)
+                        f.Add(a);
+
+                // only continue onto Y_{i+1} if FIRST(Y_i) contains eps
+                if (!first[Y].Contains((byte)T.epsilon))
+                    addEps = false;
+                    break;
+            }
+
+            if (addEps)
+                f.Add((byte)T.epsilon);
+
+            return f;
+        }
+
+        // calculate FOLLOW for all non-terminals
+        static Dictionary<byte, HashSet<byte>> FOLLOW(Dictionary<byte, HashSet<byte>> first, List<ProductionRule> G) {
+            Dictionary<byte, HashSet<byte>> follow = new Dictionary<byte, HashSet<byte>>();
+            foreach (ProductionRule pr in G)
+                if (!follow.ContainsKey(pr.LHS))
+                    follow.Add(pr.LHS, new HashSet<byte>());
+
+            // assume first production rule is the start symbol; insert $ into FOLLOW(start)
+            follow[G[0].LHS].Add((byte)T.dollar);
+
+            while (true) {
+                bool added = false;
+
+                foreach (ProductionRule pr in G) {
+                    byte B;
+                    // loop through all possibilities of A -> aBb (so that b is not null)
+                    for (int i = 0; i < pr.RHS.Count - 1; i++) {
+                        List<byte> a = pr.RHS.Take(i).ToList();
+                        B = pr.RHS[i];
+                        List<byte> b = pr.RHS.Skip(i + 1).ToList();
+
+                        if (IsTerminal(B)) // B is NT
+                            continue;
+                        
+                        // everything in FIRST(b), except eps, is in FOLLOW(B)
+                        HashSet<byte> first_b = FIRST(b, first);
+                        foreach (byte t in first_b)
+                            if (t != (byte)T.epsilon)
+                                added = follow[B].Add(t) | added;
+
+                        // if FIRST(b) contains eps, then everything in FOLLOW(A) is in FOLLOW(B)
+                        if (first_b.Contains((byte)T.epsilon))
+                            foreach (byte t in follow[pr.LHS])
+                                added = follow[B].Add(t) | added;
+                    }
+
+                    // if production A -> aB, then everything in FOLLOW(A) is in FOLLOW(B)
+                    B = pr.RHS[pr.RHS.Count - 1];
+
+                    // make sure B is a non-terminal
+                    if (!IsTerminal(B))
+                        foreach (byte t in follow[pr.LHS])
+                            added = follow[B].Add(t) | added;
+                }
+
+                if (!added)
+                    break;
+            }
+
+            return follow;
         }
 
         // Define Grammar in terms of production rules
@@ -314,6 +393,7 @@ namespace lr0_parser {
             // To calculate Action, need to calculate FOLLOW, which needs FIRST, which needs non-left-recursive grammar
             List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar.Skip(1).ToList()); // remove augmented grammar rule
             Dictionary<byte, HashSet<byte>> first = FIRST(NLRGrammar);
+            Dictionary<byte, HashSet<byte>> follow = FOLLOW(first, NLRGrammar);
 
             Console.ReadLine();
         }
