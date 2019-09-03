@@ -357,8 +357,21 @@ namespace lr0_parser {
             return -1;
         }
 
+        // Parse a given input, returns true if successful, false otherwise
+        // input finishes with $
+        static bool Parse(List<string> input, string[,] Action, int[,] Goto) {
+            Stack<byte> stack = new Stack<byte>(); stack.Push(0); // initial state
+            int a_i = 0; // index into input
+
+            while (true) {
+                byte s = stack.Pop();
+
+                
+            }
+        }
+
         // Define Grammar in terms of production rules
-        List<ProductionRule> grammar = new List<ProductionRule> {
+        static List<ProductionRule> grammar = new List<ProductionRule> {
             new ProductionRule((byte) NT.EPDash, new List<byte>{ (byte) NT.EP }),
             new ProductionRule((byte) NT.EP, new List<byte>{ (byte) NT.EP, (byte) T.plus, (byte) NT.EM }),
             new ProductionRule((byte) NT.EP, new List<byte>{ (byte) NT.EM }),
@@ -385,9 +398,11 @@ namespace lr0_parser {
         };
 
         static void Main(string[] args) {
+            List<ProductionRule> GRAMMAR = textbookGrammar;
+
             // Constructing a SLR-parsing table
             // Step 1, construct C,  the collection of sets of LR(0) items for G'.
-            List<HashSet<string>> C = ITEMS(textbookGrammar);
+            List<HashSet<string>> C = ITEMS(GRAMMAR);
 
             // Step 2, construct Action and Goto tables
             //      ACTION table: [number of states, number of terminals]
@@ -406,7 +421,7 @@ namespace lr0_parser {
             for (int i = 0; i < C.Count; i++) {
                 foreach (NT A in Enum.GetValues(typeof(NT))) {
                     byte a = (byte)A;
-                    HashSet<string> temp = GOTO(C[i].ToList(), a, textbookGrammar);
+                    HashSet<string> temp = GOTO(C[i].ToList(), a, GRAMMAR);
                     int j = GetStateID(temp, C);
                     if (j != -1)
                         Goto[i, (int)(a - NT.EPDash)] = j;
@@ -414,27 +429,27 @@ namespace lr0_parser {
             }
 
             // To calculate Action, need to calculate FOLLOW, which needs FIRST, which needs non-left-recursive grammar
-            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar); // remove augmented grammar rule .Skip(1).ToList()
+            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(GRAMMAR); // remove augmented grammar rule .Skip(1).ToList()
             Dictionary<byte, HashSet<byte>> first = FIRST(NLRGrammar);
-            Dictionary<byte, HashSet<byte>> follow = FOLLOW(first, textbookGrammar);
+            Dictionary<byte, HashSet<byte>> follow = FOLLOW(first, GRAMMAR);
 
             for (int i = 0; i < C.Count; i++) {
                 foreach (string t in C[i]) {
                     byte a = ExtractNextToDot(t);
 
                     if (IsTerminal(a)) {
-                        int j = GetStateID(GOTO(C[i].ToList(), a, textbookGrammar), C);
+                        int j = GetStateID(GOTO(C[i].ToList(), a, GRAMMAR), C);
                         if (j != -1)
                             Action[i, a - (byte)T.plus] = "s_" + j;
                     } else if (a == 0) { // dot at the end of the string
                         // end of string and it's the starting symbol
-                        if (t.Substring(0, 2).Equals(textbookGrammar[0].LHS.ToString()))
+                        if (t.Substring(0, 2).Equals(GRAMMAR[0].LHS.ToString()))
                             Action[i, (byte)T.dollar - (byte)T.plus] = "acc";
                         else { // just A -> a.
                             byte A = Byte.Parse(t.Substring(0, 2));
                             HashSet<byte> temp = follow[A];
                             foreach (byte aa in temp)
-                                Action[i, aa - (byte)T.plus] = "r_" + LookupProductionNum(t, textbookGrammar);
+                                Action[i, aa - (byte)T.plus] = "r_" + LookupProductionNum(t, GRAMMAR);
                         }
                     }
                 }
