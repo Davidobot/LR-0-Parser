@@ -340,6 +340,23 @@ namespace lr0_parser {
             return follow;
         }
 
+        // dot string to production rule number
+        static int LookupProductionNum(string a, List<ProductionRule> G) {
+            byte LHS = Byte.Parse(a.Substring(0, 2));
+            string[] s = a.Split('>')[1].Replace(".", "").Replace("__", "_").Split('_');
+            List<byte> gs = new List<byte>();
+            foreach (string t in s)
+                if (!t.Equals(""))
+                    gs.Add(Byte.Parse(t));
+
+            for (int i = 0; i < G.Count; i++) {
+                if (G[i].RHS.SequenceEqual(gs) && LHS == G[i].LHS)
+                    return i;
+            }
+
+            return -1;
+        }
+
         // Define Grammar in terms of production rules
         List<ProductionRule> grammar = new List<ProductionRule> {
             new ProductionRule((byte) NT.EPDash, new List<byte>{ (byte) NT.EP }),
@@ -373,27 +390,81 @@ namespace lr0_parser {
             List<HashSet<string>> C = ITEMS(textbookGrammar);
 
             // Step 2, construct Action and Goto tables
-            string[,] Action = new string[C.Count, T.epsilon - T.plus + 1]; // number of states, number of terminals
+            //      ACTION table: [number of states, number of terminals]
+            //      for indexing, terminal value = terminal value - 10 (T.plus)
+            string[,] Action = new string[C.Count, T.epsilon - T.plus + 1];
             // actions:
             //          s_i means shift and stack state i
             //          r_j means reduce by the production numbered j
             //          acc means accept
             //          otherwise (blank) means error
-            int[,] Goto = new int[C.Count, NT.S - NT.EPDash + 1];  // number of states, number of non-terminals
+
+            //      GOTO table: [number of states, number of non-terminals]
+            //      for indexing, nonterminal value = nonterminal value - 20 (NT.EPDash)
+            int[,] Goto = new int[C.Count, NT.S - NT.EPDash + 1];
 
             for (int i = 0; i < C.Count; i++) {
                 foreach (NT A in Enum.GetValues(typeof(NT))) {
                     byte a = (byte)A;
-                    int j = GetStateID(GOTO(C[i].ToList(), a, textbookGrammar), C);
+                    HashSet<string> temp = GOTO(C[i].ToList(), a, textbookGrammar);
+                    int j = GetStateID(temp, C);
                     if (j != -1)
-                        Goto[i, (int) (a - NT.EPDash)] = j;
+                        Goto[i, (int)(a - NT.EPDash)] = j;
                 }
             }
 
             // To calculate Action, need to calculate FOLLOW, which needs FIRST, which needs non-left-recursive grammar
-            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar.Skip(1).ToList()); // remove augmented grammar rule
+            List<ProductionRule> NLRGrammar = RemoveLeftRecursion(textbookGrammar); // remove augmented grammar rule .Skip(1).ToList()
             Dictionary<byte, HashSet<byte>> first = FIRST(NLRGrammar);
-            Dictionary<byte, HashSet<byte>> follow = FOLLOW(first, NLRGrammar);
+            Dictionary<byte, HashSet<byte>> follow = FOLLOW(first, textbookGrammar);
+
+            for (int i = 0; i < C.Count; i++) {
+                foreach (string t in C[i]) {
+                    byte a = ExtractNextToDot(t);
+
+                    if (IsTerminal(a)) {
+                        int j = GetStateID(GOTO(C[i].ToList(), a, textbookGrammar), C);
+                        if (j != -1)
+                            Action[i, a - (byte)T.plus] = "s_" + j;
+                    } else if (a == 0) { // dot at the end of the string
+                        // end of string and it's the starting symbol
+                        if (t.Substring(0, 2).Equals(textbookGrammar[0].LHS.ToString()))
+                            Action[i, (byte)T.dollar - (byte)T.plus] = "acc";
+                        else { // just A -> a.
+                            byte A = Byte.Parse(t.Substring(0, 2));
+                            HashSet<byte> temp = follow[A];
+                            foreach (byte aa in temp)
+                                Action[i, aa - (byte)T.plus] = "r_" + LookupProductionNum(t, textbookGrammar);
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine("== GOTO ==");
+            for (int i = -1; i < C.Count; i++) {
+                Console.Write("\n{0}\t|\t", i);
+                foreach (T x in Enum.GetValues(typeof(NT))) {
+                    byte y = (byte)x;
+
+                    if (i == -1)
+                        Console.Write("{0}\t", y);
+                    else
+                        Console.Write("{0}\t", Goto[i, y - (byte)NT.EPDash]);
+                }
+            }
+
+            Console.WriteLine("\n\n== ACTION ==");
+            for (int i = -1; i < C.Count; i++) {
+                Console.Write("\n{0}\t|\t", i);
+                foreach (T x in Enum.GetValues(typeof(T))) {
+                    byte y = (byte)x;
+
+                    if (i == -1)
+                        Console.Write("{0}\t", y);
+                    else
+                        Console.Write("{0}\t", Action[i, y - (byte)T.plus]);
+                }
+            }
 
             Console.ReadLine();
         }
