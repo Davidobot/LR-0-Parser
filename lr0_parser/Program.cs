@@ -61,6 +61,27 @@ namespace lr0_parser {
 
             return items;
         }
+        
+        override
+        public string ToString() {
+            StringBuilder sb = new StringBuilder();
+            sb.Append(LHS); sb.Append("->");
+            for (int i = 0; i < RHS.Count; i++) {
+                sb.Append(RHS[i]);
+                if (i != RHS.Count - 1)
+                    sb.Append("_");
+            }
+            return sb.ToString();
+        }
+    }
+
+    class Token {
+        public byte type;
+        public string data;
+
+        public Token(byte t, string d) {
+            type = t; data = d;
+        }
     }
 
     class Program {
@@ -359,14 +380,42 @@ namespace lr0_parser {
 
         // Parse a given input, returns true if successful, false otherwise
         // input finishes with $
-        static bool Parse(List<string> input, string[,] Action, int[,] Goto) {
+        static bool Parse(List<Token> input, string[,] Action, byte[,] Goto, List<ProductionRule> G) {
             Stack<byte> stack = new Stack<byte>(); stack.Push(0); // initial state
             int a_i = 0; // index into input
 
+            Token a = input[a_i];
             while (true) {
-                byte s = stack.Pop();
+                byte s = stack.Peek();
 
-                
+                if (Action[s, a.type - (byte)T.plus].StartsWith("s_")) { // shift
+                    foreach (var it in stack.Reverse())
+                        Console.Write(it + " ");
+
+                    stack.Push(Byte.Parse(Action[s, a.type - (byte)T.plus].Split('_')[1]));
+                    a = input[++a_i];
+
+                    Console.WriteLine("Shift");
+                } else if (Action[s, a.type - (byte)T.plus].StartsWith("r_")) { // reduce
+                    foreach (var it in stack.Reverse())
+                        Console.Write(it + " ");
+
+                    int prod_num = int.Parse(Action[s, a.type - (byte)T.plus].Split('_')[1]);
+                    for (int i = 0; i < G[prod_num].RHS.Count; i++)
+                        stack.Pop();
+
+                    byte t = stack.Peek();
+                    stack.Push(Goto[t, G[prod_num].LHS - (byte)NT.EPDash]);
+                    Console.WriteLine(G[prod_num]);
+                } else if (Action[s, a.type - (byte)T.plus].Equals("acc")) {
+                    foreach (var it in stack.Reverse())
+                        Console.Write(it + " ");
+                    Console.WriteLine("Accepted");
+                    return true;
+                } else {
+                    Console.WriteLine("Rejected");
+                    return false;
+                }
             }
         }
 
@@ -408,6 +457,9 @@ namespace lr0_parser {
             //      ACTION table: [number of states, number of terminals]
             //      for indexing, terminal value = terminal value - 10 (T.plus)
             string[,] Action = new string[C.Count, T.epsilon - T.plus + 1];
+            for (int i = 0; i < C.Count; i++)
+                for (int j = 0; j < T.epsilon - T.plus + 1; j++)
+                    Action[i, j] = "";
             // actions:
             //          s_i means shift and stack state i
             //          r_j means reduce by the production numbered j
@@ -416,7 +468,7 @@ namespace lr0_parser {
 
             //      GOTO table: [number of states, number of non-terminals]
             //      for indexing, nonterminal value = nonterminal value - 20 (NT.EPDash)
-            int[,] Goto = new int[C.Count, NT.S - NT.EPDash + 1];
+            byte[,] Goto = new byte[C.Count, NT.S - NT.EPDash + 1];
 
             for (int i = 0; i < C.Count; i++) {
                 foreach (NT A in Enum.GetValues(typeof(NT))) {
@@ -424,7 +476,7 @@ namespace lr0_parser {
                     HashSet<string> temp = GOTO(C[i].ToList(), a, GRAMMAR);
                     int j = GetStateID(temp, C);
                     if (j != -1)
-                        Goto[i, (int)(a - NT.EPDash)] = j;
+                        Goto[i, (int)(a - NT.EPDash)] = (byte) j;
                 }
             }
 
@@ -480,6 +532,11 @@ namespace lr0_parser {
                         Console.Write("{0}\t", Action[i, y - (byte)T.plus]);
                 }
             }
+
+            Console.WriteLine("\n\n== PARSE ==");
+            Parse(new List<Token> { new Token((byte)T.id, ""), new Token((byte)T.times, ""), new Token((byte)T.id, ""), new Token((byte)T.plus, ""), new Token((byte)T.id, ""), new Token((byte)T.dollar, ""), }, Action, Goto, GRAMMAR);
+            Console.WriteLine("\n\n== PARSE ==");
+            Parse(new List<Token> { new Token((byte)T.id, ""), new Token((byte)T.times, ""), new Token((byte)T.id, ""), new Token((byte)T.plus, ""), new Token((byte)T.dollar, ""), }, Action, Goto, GRAMMAR);
 
             Console.ReadLine();
         }
