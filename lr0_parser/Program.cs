@@ -178,6 +178,7 @@ namespace lr0_parser {
 				outList.Add(t);
 			}
 
+			outList.Add(new Token((byte)T.dollar, ""));
 			return outList;
 		}
 
@@ -543,7 +544,7 @@ namespace lr0_parser {
         };
 
         static void Main(string[] args) {
-            List<ProductionRule> GRAMMAR = textbookGrammar;
+            List<ProductionRule> GRAMMAR = grammar;
 
             // Constructing a SLR-parsing table
             // Step 1, construct C,  the collection of sets of LR(0) items for G'.
@@ -631,10 +632,8 @@ namespace lr0_parser {
 
             Console.WriteLine("\n\n== PARSE ==");
             Parse(new List<Token> { new Token((byte)T.id, ""), new Token((byte)T.times, ""), new Token((byte)T.id, ""), new Token((byte)T.plus, ""), new Token((byte)T.id, ""), new Token((byte)T.dollar, ""), }, Action, Goto, GRAMMAR);
-            Console.WriteLine("\n\n== PARSE ==");
-            Parse(new List<Token> { new Token((byte)T.id, ""), new Token((byte)T.times, ""), new Token((byte)T.id, ""), new Token((byte)T.plus, ""), new Token((byte)T.dollar, ""), }, Action, Goto, GRAMMAR);
-
-			List<Token> parsed = Lex("cos+4.2!--10*1.5++--++1.2+-5.6!");
+			Console.WriteLine("\n== PARSE ==");
+			Parse(Lex("cos+4.2!--10*1.5+-1.2+-5.6!"), Action, Goto, GRAMMAR);
 
 			Console.ReadLine();
         }
