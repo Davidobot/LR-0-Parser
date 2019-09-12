@@ -75,18 +75,114 @@ namespace lr0_parser {
         }
     }
 
-    class Token {
+	class ParseError : Exception {
+		public ParseError(string message) : base(message) {
+		}
+	}
+
+	class Token {
         public byte type;
         public string data;
 
         public Token(byte t, string d) {
             type = t; data = d;
         }
-    }
+
+		override
+		public string ToString() {
+			return String.Format("{0}: {1}", type, data);
+		}
+	}
 
     class Program {
-        // extracts terminal/non-terminal from directly to the right of the dot in an item
-        static byte ExtractNextToDot(string item) {
+		static List<Token> Lex(string input) {
+			List<Token> list = new List<Token>();
+
+			int pointer = 0;
+
+			while (pointer < input.Length) {
+				char cur = input[pointer];
+
+				if (cur == '(') {
+					list.Add(new Token((byte) T.bracket_open, "("));
+					pointer++; continue;
+				}
+
+				if (cur == ')') {
+					list.Add(new Token((byte)T.bracket_close, ")"));
+					pointer++; continue;
+				}
+
+				if (cur == ' ') {
+					pointer++; continue;
+				}
+
+				if ((cur - '0') >= 0 && (cur - '0') < 10) {
+					StringBuilder stringBuilder = new StringBuilder();
+
+					while (((cur - '0') >= 0 && (cur - '0') < 10) || cur == '.') {
+						stringBuilder.Append(cur);
+						pointer++;
+						if (pointer >= input.Length)
+							break;
+						cur = input[pointer];
+					}
+
+					list.Add(new Token(0, stringBuilder.ToString()));
+					continue;
+				}
+
+				String op = cur.ToString();
+				if (cur == '+' || cur == '-' || cur == '*' || cur == '!' || (op = input.Substring(pointer, 3)).CompareTo("cos") == 0) {
+					byte temp_op = 0;
+					switch(op) {
+						case "+": temp_op = (byte)T.plus; break;
+						case "-": temp_op = (byte)T.minus; break;
+						case "*": temp_op = (byte)T.times; break;
+						case "!": temp_op = (byte)T.factorial; break;
+						case "cos": temp_op = (byte)T.cos; break;
+					}
+
+					list.Add(new Token(temp_op, op));
+
+					if (op.CompareTo("cos") == 0)
+						pointer += 3;
+					else
+						pointer++;
+					continue;
+				}
+			}
+
+			List<Token> outList = new List<Token>();
+			int pastOperator = 0;
+			foreach (Token t in list) {
+				// + - * cos !
+				if (t.type >= 10 && t.type <= 14) {
+					if (pastOperator > 0 && (t.data == "+" || t.data == "-")) {
+						pastOperator = (t.data == "+") ? 2 : 3;
+					} else
+						pastOperator = 1;
+					outList.Add(t);
+					continue;
+				}
+
+				if (t.type == 0) {
+					if (pastOperator > 1) // Remove last operator as it will be intergrated into signed float
+						outList.RemoveAt(outList.Count - 1);
+
+					outList.Add(new Token((byte)T.id, ((pastOperator == 3) ? "-" : "") + t.data));
+					pastOperator = 0;
+					continue;
+				}
+
+				outList.Add(t);
+			}
+
+			return outList;
+		}
+
+		// extracts terminal/non-terminal from directly to the right of the dot in an item
+		static byte ExtractNextToDot(string item) {
             item = item.Split('.')[1]; // one dot, take RHS
             item = item.Replace("_", "");
 
@@ -538,7 +634,9 @@ namespace lr0_parser {
             Console.WriteLine("\n\n== PARSE ==");
             Parse(new List<Token> { new Token((byte)T.id, ""), new Token((byte)T.times, ""), new Token((byte)T.id, ""), new Token((byte)T.plus, ""), new Token((byte)T.dollar, ""), }, Action, Goto, GRAMMAR);
 
-            Console.ReadLine();
+			List<Token> parsed = Lex("cos+4.2!--10*1.5++--++1.2+-5.6!");
+
+			Console.ReadLine();
         }
     }
 }
